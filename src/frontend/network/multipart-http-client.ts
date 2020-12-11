@@ -1,13 +1,21 @@
 import type { ExecutionResult, AsyncExecutionResult } from 'graphql';
 
-type Part<T> =
-  | { json: true; headers: Record<string, string>; body: T }
-  | { json: false; headers: Record<string, string>; body: string };
-
-const separator = '\r\n\r\n';
+const CRLF = '\r\n';
+const separator = CRLF + CRLF;
 const decoder = new TextDecoder();
 
-export async function graphqlHttp({ query, variables }: { query: string; variables?: any }) {
+export class HttpGraphQLClient {
+  readonly url: string;
+  constructor({ url } : { url : string }) {
+    this.url = url;
+  }
+
+  graphql(args: { query: string; variables?: any }) {
+    return graphqlHttp(args);
+  }
+}
+
+async function graphqlHttp({ query, variables }: { query: string; variables?: any }) {
   const headers = new Headers();
   headers.set('Accept', 'application/json, multipart/mixed');
   headers.set('Content-Type', 'application/json');
@@ -25,13 +33,14 @@ export async function graphqlHttp({ query, variables }: { query: string; variabl
   if (res.headers.get('Content-Type')?.trim().startsWith('multipart/mixed') && res.body) {
     const boundary = /boundary="(.*)"/.exec(res.headers.get('Content-Type') ?? '')?.[1];
     if (boundary) {
-      return generate(res.body, boundary) as AsyncIterableIterator<AsyncExecutionResult>;
+      return generateFromMultipartResponse(res.body, boundary) as AsyncIterableIterator<AsyncExecutionResult>;
     }
   }
-  return await res.json() as ExecutionResult;
+  return (await res.json()) as ExecutionResult;
 }
 
-async function* generate<T>(stream: ReadableStream<Uint8Array>, boundary: string): AsyncGenerator<Part<T>> {
+async function* generateFromMultipartResponse(stream: ReadableStream<Uint8Array>, boundary: string) {
+  const dashBoundary = '--' + boundary;
   const reader = stream.getReader();
   let buffer = '';
   let lastIndex = 0;
@@ -39,60 +48,52 @@ async function* generate<T>(stream: ReadableStream<Uint8Array>, boundary: string
 
   try {
     let result: ReadableStreamReadResult<Uint8Array>;
-    outer: while (!(result = await reader.read()).done) {
+    while (!(result = await reader.read()).done) {
       const chunk = decoder.decode(result.value);
-      const idxChunk = chunk.indexOf(boundary);
+      const idxChunk = chunk.indexOf(dashBoundary);
       let idxBoundary = buffer.length;
       buffer += chunk;
 
-      if (!!~idxChunk) {
-        // chunk itself had `boundary` marker
+      if (idxChunk !== -1) {
         idxBoundary += idxChunk;
       } else {
-        // search combined (boundary can be across chunks)
-        idxBoundary = buffer.indexOf(boundary, lastIndex);
+        idxBoundary = buffer.indexOf(dashBoundary, lastIndex);
 
-        if (!~idxBoundary) {
-          // rewind a bit for next `indexOf`
+        if (idxBoundary === -1) {
           lastIndex = buffer.length - chunk.length;
           continue;
         }
       }
 
-      while (!!~idxBoundary) {
-        const current = buffer.substring(0, idxBoundary);
-        const next = buffer.substring(idxBoundary + boundary.length);
+      while (idxBoundary !== -1) {
+        const current = buffer.slice(0, idxBoundary);
+        const next = buffer.slice(idxBoundary + dashBoundary.length);
 
         if (isPreamble) {
           isPreamble = false;
         } else {
           const headers: Record<string, string> = {};
           const idxHeaders = current.indexOf(separator);
-          const arrHeaders = buffer.slice(0, idxHeaders).toString().trim().split(/\r\n/);
+          const headerLows = buffer.slice(0, idxHeaders).trim().split(CRLF);
 
-          // parse headers
-          let tmp: string | undefined = undefined;
-          while ((tmp = arrHeaders.shift())) {
-            const tmp2 = tmp!.split(': ');
-            headers[tmp2.shift()!.toLowerCase()] = tmp2.join(': ');
+          for (const headerLow of headerLows) {
+            const [key, ...values] = headerLow!.split(': ') as [string, ...string[]];
+            headers[key.toLowerCase()] = values.join(': ');
           }
 
-          let body = current.substring(idxHeaders + separator.length, current.lastIndexOf('\r\n'));
-          tmp = headers['content-type'];
-          if (tmp && !!~tmp.indexOf('application/json')) {
+          let body = current.slice(idxHeaders + separator.length, current.lastIndexOf(CRLF));
+          if (headers['content-type']?.includes('application/json')) {
             try {
               body = JSON.parse(body);
             } catch (_) {}
           }
 
-          yield (body as any) as Part<T>;
-
-          if (next.substring(0, 2) === '--') break outer;
+          yield body;
         }
 
         buffer = next;
         lastIndex = 0;
-        idxBoundary = buffer.indexOf(boundary);
+        idxBoundary = buffer.indexOf(dashBoundary);
       }
     }
   } finally {

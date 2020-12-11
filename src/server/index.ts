@@ -1,9 +1,10 @@
 import path from 'path';
 import express from 'express';
-import { DocumentNode, parse, validate, execute} from 'graphql';
+import { DocumentNode, parse, validate, execute } from 'graphql';
 import { schema } from '../schema';
 
-const BOUNDARY = 'Boundary';
+const BOUNDARY = 'h';
+const CRLF = '\r\n';
 
 const app = express();
 
@@ -50,14 +51,23 @@ app.post('/graphql', async (req, res) => {
         'Transfer-Encoding': 'chunked',
         Connection: 'keep-alive',
       });
-      for await (const chunk of result) {
-        const buffer = JSON.stringify(chunk);
+      for await (const payloadObj of result) {
+        const payloadBody = JSON.stringify(payloadObj);
+        // prettier-ignore
+        const multipart = CRLF
+                        + CRLF
+                        + `--${BOUNDARY}` + CRLF
+                        + 'Content-Type: application/json; charset=UTF-8' + CRLF
+                        + `Content-Length: ${payloadBody.length}` + CRLF
+                        + CRLF
+                        + payloadBody;
         res.write(`\r\n\r\n--${BOUNDARY}\r\n`);
         res.write('Content-Type: application/json; charset=UTF-8\r\n');
-        res.write(`Content-Length: ${buffer.length}\r\n\r\n`);
-        res.write(buffer);
+        res.write(`Content-Length: ${payloadBody.length}\r\n\r\n`);
+        res.write(payloadBody);
+        // res.write(multipart);
       }
-      res.write(`\r\n--${BOUNDARY}--\r\n`);
+      res.write(CRLF + `--${BOUNDARY}--` + CRLF);
       res.end();
     } else {
       res.json(result).end();

@@ -56,7 +56,7 @@ const Query = new GraphQLObjectType({
  * }
  *
  * type Query {
- *  products(first: Int!): [Product]
+ *   products(first: Int!): [Product]
  * }
  * ```
  *

@@ -5,33 +5,32 @@ function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
   return x != null && typeof x === 'object' && x[Symbol.asyncIterator];
 }
 
-function isPatch(x: AsyncExecutionResult): x is ExecutionPatchResult{
-  return 'label' in x && typeof x['label'] === 'string';
+function isPatch(x: AsyncExecutionResult): x is ExecutionPatchResult {
+  return 'path' in x && Array.isArray(x.path);
 }
 
 async function main() {
   const result = await graphql({
     source: `
-      fragment ProductDetail on Product {
-        specialPrice
-      }
       query ProductsQuery {
-        products(first: 4) @stream(initialCount: 1, label: "list") {
+        products(first: 4) @stream(initialCount: 1, label: "stream") {
           id
           name
           price
-          ...ProductDetail @defer(label: "detail")
+          ... on Product @defer(label: "specialPrice") {
+            specialPrice
+          }
         }
       }
     `,
     schema,
   });
   if (isAsyncIterable(result)) {
-    for await (const chunk of result) {
-      if (!isPatch(chunk)) {
-        console.log(chunk.data);
+    for await (const payload of result) {
+      if (!isPatch(payload)) {
+        console.log(payload.data, payload.hasNext);
       } else {
-        console.log(chunk.label, chunk.path, chunk.data);
+        console.log(payload.path, payload.label, payload.data, payload.hasNext);
       }
     }
   } else {

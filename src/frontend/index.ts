@@ -1,5 +1,5 @@
 import type { AsyncExecutionResult, ExecutionPatchResult } from "graphql";
-import { graphqlHttp } from './network/multipart-http-client.js';
+import { HttpGraphQLClient } from './network/multipart-http-client.js';
 
 type Path = readonly (string | number)[];
 
@@ -23,11 +23,12 @@ function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
 }
 
 function isPatch(x: AsyncExecutionResult): x is ExecutionPatchResult{
-  return 'label' in x && typeof x['label'] === 'string';
+  return 'path' in x && Array.isArray(x.path);
 }
 
 async function* graphql({ query, variables }: { query: string; variables?: any }) {
-  const result = await graphqlHttp({ query, variables });
+  const client = new HttpGraphQLClient({ url: '/graphql'});
+  const result = await client.graphql({ query, variables });
   if (isAsyncIterable(result)) {
     let data: any = {};
     for await (const chunk of result) {
@@ -52,11 +53,11 @@ async function main(enableStream = true) {
       specialPrice
     }
     query ProductsQuery($enableStream: Boolean!) {
-      products(first: 4) @stream(initialCount: 1, label: "list", if: $enableStream) {
+      products(first: 4) @stream(initialCount: 1, if: $enableStream) {
         id
         name
         price
-        ...ProductDetail @defer(label: "detail", if: $enableStream)
+        ...ProductDetail @defer(if: $enableStream)
       }
     }
   `;

@@ -2,7 +2,6 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "sourceMap": true,
     "inlineSourceMap": true,
     "outDir": "../../public/dist",
     "module": "esnext"
