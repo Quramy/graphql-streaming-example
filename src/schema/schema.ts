@@ -68,7 +68,7 @@ export const schema = new GraphQLSchema({
 async function* collectProducts({ first } : { first: number } ) {
   for (const item of products.slice(0, first)) {
     yield item;
-    await sleep(100);
+    await sleep(300);
   }
 }
 

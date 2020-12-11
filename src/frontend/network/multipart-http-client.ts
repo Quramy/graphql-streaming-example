@@ -1,3 +1,5 @@
+import type { ExecutionResult, AsyncExecutionResult } from 'graphql';
+
 type Part<T> =
   | { json: true; headers: Record<string, string>; body: T }
   | { json: false; headers: Record<string, string>; body: string };
@@ -5,17 +7,28 @@ type Part<T> =
 const separator = '\r\n\r\n';
 const decoder = new TextDecoder();
 
-export async function convertToIter(res: Response) {
+export async function graphqlHttp({ query, variables }: { query: string; variables?: any }) {
+  const headers = new Headers();
+  headers.set('Accept', 'application/json, multipart/mixed');
+  headers.set('Content-Type', 'application/json');
+  const res = await fetch('/graphql', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      query,
+      variables,
+    }),
+  });
   if (!res.ok) {
     throw new Error(await res.text());
   }
   if (res.headers.get('Content-Type')?.trim().startsWith('multipart/mixed') && res.body) {
     const boundary = /boundary="(.*)"/.exec(res.headers.get('Content-Type') ?? '')?.[1];
     if (boundary) {
-      return generate(res.body, boundary);
+      return generate(res.body, boundary) as AsyncIterableIterator<AsyncExecutionResult>;
     }
   }
-  return res;
+  return await res.json() as ExecutionResult;
 }
 
 async function* generate<T>(stream: ReadableStream<Uint8Array>, boundary: string): AsyncGenerator<Part<T>> {
@@ -65,18 +78,14 @@ async function* generate<T>(stream: ReadableStream<Uint8Array>, boundary: string
           }
 
           let body = current.substring(idxHeaders + separator.length, current.lastIndexOf('\r\n'));
-          let isJson = false;
-
           tmp = headers['content-type'];
           if (tmp && !!~tmp.indexOf('application/json')) {
             try {
               body = JSON.parse(body);
-              isJson = true;
             } catch (_) {}
           }
 
-          // @ts-ignore
-          yield { headers, body, json: isJson };
+          yield (body as any) as Part<T>;
 
           if (next.substring(0, 2) === '--') break outer;
         }

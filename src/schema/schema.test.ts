@@ -1,5 +1,13 @@
-import { graphql } from 'graphql';
+import { graphql, AsyncExecutionResult, ExecutionPatchResult } from 'graphql';
 import { schema } from './schema';
+
+function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
+  return x != null && typeof x === 'object' && x[Symbol.asyncIterator];
+}
+
+function isPatch(x: AsyncExecutionResult): x is ExecutionPatchResult{
+  return 'label' in x && typeof x['label'] === 'string';
+}
 
 async function main() {
   const result = await graphql({
@@ -8,7 +16,7 @@ async function main() {
         specialPrice
       }
       query ProductsQuery {
-        products(first: 3) @stream(initialCount: 1, label: "list") {
+        products(first: 4) @stream(initialCount: 1, label: "list") {
           id
           name
           price
@@ -18,9 +26,9 @@ async function main() {
     `,
     schema,
   });
-  if ('next' in result) {
+  if (isAsyncIterable(result)) {
     for await (const chunk of result) {
-      if (!('path' in chunk)) {
+      if (!isPatch(chunk)) {
         console.log(chunk.data);
       } else {
         console.log(chunk.label, chunk.path, chunk.data);

@@ -3,12 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <title>Streaming GraphQL query with @defer/@stream</title>
+    <style type="text/css">
+      #out > pre {
+        font-size: larger;
+      }
+    </style>
   </head>
   <body>
     <main>
+      <div>
+        <button class="fetch-btn" data-stream-enabled="true">Fetch (stream enabled)</button>
+        <button class="fetch-btn" data-stream-enabled="false">Fetch (stream disabled)</button>
+      </div>
       <div id="out"></div>
     </main>
-    <script type="module" src="dist/convert-to-iter.js"></script>
+    <script type="module" src="dist/network/multipart-http-client.js"></script>
     <script type="module" src="dist/index.js"></script>
   </body>
 </html>

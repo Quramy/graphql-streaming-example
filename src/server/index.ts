@@ -1,6 +1,6 @@
 import path from 'path';
 import express from 'express';
-import { DocumentNode, parse, validate, graphql } from 'graphql';
+import { DocumentNode, parse, validate, execute} from 'graphql';
 import { schema } from '../schema';
 
 const BOUNDARY = 'Boundary';
@@ -39,9 +39,9 @@ app.post('/graphql', async (req, res) => {
     return;
   }
   try {
-    const result = await graphql({
+    const result = await execute({
       schema,
-      source: query,
+      document: ast,
       variableValues: variables ?? {},
     });
     if ('next' in result) {
