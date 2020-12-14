@@ -3,7 +3,12 @@ import express from 'express';
 import { DocumentNode, parse, validate, execute } from 'graphql';
 import { schema } from '../schema';
 
-const BOUNDARY = 'h';
+function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
+  return x != null && typeof x === 'object' && x[Symbol.asyncIterator];
+}
+
+
+const BOUNDARY = '-';
 const CRLF = '\r\n';
 
 const app = express();
@@ -21,9 +26,9 @@ app.post('/graphql', async (req, res) => {
     return;
   }
 
-  let ast: DocumentNode | undefined = undefined;
+  let document: DocumentNode | undefined = undefined;
   try {
-    ast = parse(query);
+    document = parse(query);
   } catch (e) {
     res
       .json({ errors: [{ message: 'parse error' }] })
@@ -31,7 +36,7 @@ app.post('/graphql', async (req, res) => {
       .end();
     return;
   }
-  const gqlErrors = validate(schema, ast!);
+  const gqlErrors = validate(schema, document!);
   if (gqlErrors.length > 0) {
     res
       .json({ errors: gqlErrors.map(({ message, locations, name }) => ({ message, locations, name })) })
@@ -42,14 +47,13 @@ app.post('/graphql', async (req, res) => {
   try {
     const result = await execute({
       schema,
-      document: ast,
+      document,
       variableValues: variables ?? {},
     });
-    if ('next' in result) {
+    if (isAsyncIterable(result)) {
       res.writeHead(200, {
         'Content-Type': `multipart/mixed; charset=UTF-8; boundary="${BOUNDARY}"`,
         'Transfer-Encoding': 'chunked',
-        Connection: 'keep-alive',
       });
       for await (const payloadObj of result) {
         const payloadBody = JSON.stringify(payloadObj);
@@ -61,11 +65,7 @@ app.post('/graphql', async (req, res) => {
                         + `Content-Length: ${payloadBody.length}` + CRLF
                         + CRLF
                         + payloadBody;
-        res.write(`\r\n\r\n--${BOUNDARY}\r\n`);
-        res.write('Content-Type: application/json; charset=UTF-8\r\n');
-        res.write(`Content-Length: ${payloadBody.length}\r\n\r\n`);
-        res.write(payloadBody);
-        // res.write(multipart);
+        res.write(multipart);
       }
       res.write(CRLF + `--${BOUNDARY}--` + CRLF);
       res.end();
