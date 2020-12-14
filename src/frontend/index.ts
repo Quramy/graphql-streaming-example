@@ -3,19 +3,17 @@ import { HttpGraphQLClient } from './network/multipart-http-client.js';
 
 type Path = readonly (string | number)[];
 
-function patchData(parent: any, path: Path, patch: any) {
-  if (path.length === 0) return;
+function patchData(base: any, path: Path, patch: any) {
+  if (path.length === 0) return base;
+  let parent = base;
   const fragments = path.slice(0, path.length - 1);
   const lastIndex = path[path.length - 1]!;
   for (const fragment of fragments) {
     parent = parent[fragment];
   }
-  const base = parent[lastIndex];
-  if (base != null && typeof base === 'object') {
-    parent[lastIndex] = { ...base, ...patch };
-  } else {
-    parent[lastIndex] = patch;
-  }
+  const target = parent[lastIndex];
+  parent[lastIndex] = { ...target, ...patch };
+  return base;
 }
 
 function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
@@ -31,12 +29,12 @@ async function* graphql({ query, variables }: { query: string; variables?: any }
   const result = await client.graphql({ query, variables });
   if (isAsyncIterable(result)) {
     let data: any = {};
-    for await (const chunk of result) {
-      console.log(chunk);
-      if (!isPatch(chunk)) {
-        data = chunk.data;
+    for await (const payload of result) {
+      console.log(payload);
+      if (!isPatch(payload)) {
+        data = payload.data;
       } else {
-        patchData(data, chunk.path!, chunk.data);
+        data = patchData(data, payload.path!, payload.data);
       }
       yield data;
     }
