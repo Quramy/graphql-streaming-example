@@ -1,6 +1,14 @@
 import type { AsyncExecutionResult, ExecutionPatchResult } from "graphql";
 import { HttpGraphQLClient } from './network/multipart-http-client.js';
 
+function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
+  return x != null && typeof x === 'object' && x[Symbol.asyncIterator];
+}
+
+function isPatch(x: AsyncExecutionResult): x is ExecutionPatchResult{
+  return 'path' in x && Array.isArray(x.path);
+}
+
 type Path = readonly (string | number)[];
 
 function patchData(base: any, path: Path, patch: any) {
@@ -14,14 +22,6 @@ function patchData(base: any, path: Path, patch: any) {
   const target = parent[lastIndex];
   parent[lastIndex] = { ...target, ...patch };
   return base;
-}
-
-function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
-  return x != null && typeof x === 'object' && x[Symbol.asyncIterator];
-}
-
-function isPatch(x: AsyncExecutionResult): x is ExecutionPatchResult{
-  return 'path' in x && Array.isArray(x.path);
 }
 
 async function* graphql({ query, variables }: { query: string; variables?: any }) {

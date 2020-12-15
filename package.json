@@ -6,7 +6,7 @@
   "scripts": {
     "build:front": "tsc -p src/frontend",
     "start": "ts-node-dev src/server/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "ts-node src/schema/schema.test.ts"
   },
   "keywords": [],
   "author": "",
