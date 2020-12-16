@@ -55,21 +55,23 @@ app.post('/graphql', async (req, res) => {
         'Content-Type': `multipart/mixed; charset=UTF-8; boundary="${BOUNDARY}"`,
         'Transfer-Encoding': 'chunked',
       });
+      res.write(CRLF + CRLF + `--${BOUNDARY}`);
       for await (const payloadObj of result) {
         const payloadBody = JSON.stringify(payloadObj);
         // prettier-ignore
         const multipart = CRLF
-                        + CRLF
-                        + `--${BOUNDARY}` + CRLF
                         + 'Content-Type: application/json; charset=UTF-8' + CRLF
                         + `Content-Length: ${payloadBody.length}` + CRLF
                         + CRLF
-                        + payloadBody;
+                        + payloadBody
+                        + CRLF
+                        + CRLF
+                        + `--${BOUNDARY}`
         res.write(multipart);
         // @ts-expect-error
         typeof res.flush === 'function' && res.flush !== ServerResponse.prototype.flush && res.flush();
       }
-      res.write(CRLF + `--${BOUNDARY}--` + CRLF);
+      res.write('--' + CRLF);
       res.end();
     } else {
       res.json(result).end();
