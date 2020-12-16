@@ -1,12 +1,12 @@
 import path from 'path';
 import express from 'express';
+import { ServerResponse } from 'http';
 import { DocumentNode, parse, validate, execute } from 'graphql';
 import { schema } from '../schema';
 
 function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
   return x != null && typeof x === 'object' && x[Symbol.asyncIterator];
 }
-
 
 const BOUNDARY = '-';
 const CRLF = '\r\n';
@@ -66,6 +66,8 @@ app.post('/graphql', async (req, res) => {
                         + CRLF
                         + payloadBody;
         res.write(multipart);
+        // @ts-expect-error
+        typeof res.flush === 'function' && res.flush !== ServerResponse.prototype.flush && res.flush();
       }
       res.write(CRLF + `--${BOUNDARY}--` + CRLF);
       res.end();
