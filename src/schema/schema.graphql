@@ -1,0 +1,17 @@
+type Query {
+  products(first: Int!): [Product]
+  allProducts: AllProducts!
+}
+
+type Product {
+  id: ID!
+  name: String!
+  price: Int!
+  specialPrice: Int
+}
+
+type AllProducts {
+  count: Int!
+  nodes: [Product!]!
+}
+

@@ -1,5 +1,5 @@
 import type { AsyncExecutionResult, ExecutionPatchResult } from "graphql";
-import { HttpGraphQLClient } from './network/multipart-http-client.js';
+import { HttpGraphQLClient } from './lib/network/multipart-http-client';
 
 function isAsyncIterable(x: any): x is AsyncIterableIterator<any> {
   return x != null && typeof x === 'object' && x[Symbol.asyncIterator];

@@ -1,9 +1,15 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "noEmit": false,
-    "inlineSourceMap": true,
-    "outDir": "../../public/dist",
-    "module": "esnext"
+    "jsx": "react-jsx",
+    "sourceMap": true,
+    "module": "esnext",
+    "plugins": [
+      {
+        "name": "ts-graphql-plugin",
+        "schema": "../schema/schema.graphql",
+        "tag": "graphql"
+      }
+    ]
   }
 }

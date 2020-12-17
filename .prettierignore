@@ -1,5 +1,4 @@
 dist/
-lib/
 project-fixtures/
 __snapshots__/
 **/testing/resources/*.graphql

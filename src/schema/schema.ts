@@ -30,6 +30,20 @@ const Product = new GraphQLObjectType({
   },
 });
 
+const AllProducts = new GraphQLObjectType({
+  name: 'AllProducts',
+  fields: {
+    count: {
+      type: GraphQLNonNull(GraphQLInt),
+      resolve: () => products.length,
+    },
+    nodes: {
+      type: GraphQLNonNull(GraphQLList(GraphQLNonNull(Product))),
+      resolve: () => collectProducts(),
+    },
+  },
+});
+
 const Query = new GraphQLObjectType({
   name: 'Query',
   fields: {
@@ -41,6 +55,10 @@ const Query = new GraphQLObjectType({
         },
       },
       resolve: (_, args) => collectProducts(args as { first: number }),
+    },
+    allProducts: {
+      type: GraphQLNonNull(AllProducts),
+      resolve: () => ({}),
     },
   },
 });
@@ -55,8 +73,14 @@ const Query = new GraphQLObjectType({
  *   specialPrice: Int
  * }
  *
+ * type AllProducts {
+ *   count: Int!
+ *   nodes: [Product!]!
+ * }
+ *
  * type Query {
  *   products(first: Int!): [Product]
+ *   allProducts: AllProducts!
  * }
  * ```
  *
@@ -65,10 +89,10 @@ export const schema = new GraphQLSchema({
   query: Query,
 });
 
-async function* collectProducts({ first } : { first: number } ) {
+async function* collectProducts({ first } = { first: products.length }) {
   for (const item of products.slice(0, first)) {
-    yield item;
     await sleep(300);
+    yield item;
   }
 }
 

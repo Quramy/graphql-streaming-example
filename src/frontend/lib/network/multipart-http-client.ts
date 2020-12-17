@@ -1,12 +1,13 @@
 import type { ExecutionResult, AsyncExecutionResult } from 'graphql';
+import { GraphQLTransport } from '../types';
 
 const CRLF = '\r\n';
 const separator = CRLF + CRLF;
 const decoder = new TextDecoder();
 
-export class HttpGraphQLClient {
+export class HttpGraphQLClient implements GraphQLTransport {
   readonly url: string;
-  constructor({ url } : { url : string }) {
+  constructor({ url }: { url: string }) {
     this.url = url;
   }
 
