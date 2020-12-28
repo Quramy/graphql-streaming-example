@@ -15,15 +15,24 @@ export class Environment {
 
   constructor(public readonly client: GraphQLTransport) {}
 
-  query<T = any, V = any>({ query, variables }: { query: string; variables: V }) {
+  getOperationKey({ query, variables }: { query: string; variables: any }) {
+    return getOperationKey({ query, variables });
+  }
+
+  readFragment<T = any>(operationKey: string, path: Path) {
+    const fragmentKey = [operationKey, ...path].join('/');
+    const patchResult = this.fragmentCache.get(fragmentKey);
+    if (patchResult) {
+      return { ...(patchResult as ExecutionResult<T>), operationKey: fragmentKey };
+    }
+  }
+
+  query({ query, variables }: { query: string; variables: any }) {
     const operationKey = getOperationKey({ query, variables });
     const operation = this.operations.get(operationKey) ?? new Operation(this.client, query, variables);
-    if (this.fragmentCache.has(operationKey)) {
-      return { ...(this.fragmentCache.get(operationKey)! as ExecutionResult<T, {}>), operationKey };
-    }
-    if (!operation.started) operation.start();
+    if (!operation.started) operation.start(() => this.operations.delete(operationKey));
     this.operations.set(operationKey, operation);
-    throw new Promise<void>(res =>
+    return new Promise<void>(res =>
       operation.once([], queryPayload => {
         this.fragmentCache.set(operationKey, queryPayload);
         res();
@@ -31,34 +40,30 @@ export class Environment {
     );
   }
 
-  fragment<T = any>(_fragment: string, { operationKey, path }: { operationKey: string; path: Path }) {
+  fragment(_fragment: string, { operationKey, path }: { operationKey: string; path: Path }) {
+    const fragmentKey = operationKey + '/' + path.join('/');
     const operation = this.operations.get(operationKey);
     if (!operation) {
       throw new Error('fragment needs operation');
     }
-
-    const fragmentKey = operationKey + '/' + path.join('/');
-    const patchResult = this.fragmentCache.get(fragmentKey);
-    if (!patchResult) {
-      throw new Promise<void>(res => {
-        operation.once(path, payload => {
-          this.fragmentCache.set(fragmentKey, payload);
-          res();
-        });
+    return new Promise<void>(res => {
+      operation.once(path, payload => {
+        this.fragmentCache.set(fragmentKey, payload);
+        res();
       });
-    }
-    return { ...(patchResult as ExecutionResult<T>), operationKey: fragmentKey };
+    });
   }
 }
 
 type Callback = (payload: AsyncExecutionResult) => void;
 
-function getOperationKey({ query, variables }: { query: string, variables: any }) {
+function getOperationKey({ query, variables }: { query: string; variables: any }) {
   return query + JSON.stringify(variables);
 }
 
 class Operation {
   private _started = false;
+  private _completed = false;
   private listeners = new Set<{ pathKey: string; path: Path; cb: Callback }>();
   private payloads = new Map<string, ExecutionResult>();
   constructor(
@@ -67,11 +72,15 @@ class Operation {
     private readonly variables: any,
   ) {}
 
-  get started () {
+  get started() {
     return this._started;
   }
 
-  async start() {
+  get completed() {
+    return this._completed;
+  }
+
+  async start(completeCallback: () => void) {
     this._started = true;
     const result = await this.transport.graphql({ query: this.query, variables: this.variables });
     if (isAsyncIterable(result)) {
@@ -85,6 +94,10 @@ class Operation {
         }
         this.payloads.set(pathKey, payload);
       }
+      this._completed = true;
+      completeCallback();
+    } else {
+      // TODO
     }
   }
 
