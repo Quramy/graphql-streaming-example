@@ -16,16 +16,16 @@ export class Environment {
   constructor(public readonly client: GraphQLTransport) {}
 
   query<T = any, V = any>({ query, variables }: { query: string; variables: V }) {
-    const operation = new Operation(this.client, query, variables);
-    const operationKey = operation.id;
-    operation.start();
+    const operationKey = getOperationKey({ query, variables });
+    const operation = this.operations.get(operationKey) ?? new Operation(this.client, query, variables);
     if (this.fragmentCache.has(operationKey)) {
       return { ...(this.fragmentCache.get(operationKey)! as ExecutionResult<T, {}>), operationKey };
     }
+    if (!operation.started) operation.start();
     this.operations.set(operationKey, operation);
     throw new Promise<void>(res =>
       operation.once([], queryPayload => {
-        this.fragmentCache.set(operation.id, queryPayload);
+        this.fragmentCache.set(operationKey, queryPayload);
         res();
       }),
     );
@@ -53,7 +53,12 @@ export class Environment {
 
 type Callback = (payload: AsyncExecutionResult) => void;
 
+function getOperationKey({ query, variables }: { query: string, variables: any }) {
+  return query + JSON.stringify(variables);
+}
+
 class Operation {
+  private _started = false;
   private listeners = new Set<{ pathKey: string; path: Path; cb: Callback }>();
   private payloads = new Map<string, ExecutionResult>();
   constructor(
@@ -62,11 +67,12 @@ class Operation {
     private readonly variables: any,
   ) {}
 
-  get id() {
-    return this.query + JSON.stringify(this.variables);
+  get started () {
+    return this._started;
   }
 
   async start() {
+    this._started = true;
     const result = await this.transport.graphql({ query: this.query, variables: this.variables });
     if (isAsyncIterable(result)) {
       for await (const payload of result) {
@@ -81,12 +87,14 @@ class Operation {
       }
     }
   }
+
   addListener(path: Path, cb: Callback) {
     const pathKey = path.join('/');
     const listner = { pathKey, path, cb };
     this.listeners.add(listner);
     return () => this.listeners.delete(listner);
   }
+
   removeListener(path: Path, cb: Callback) {
     const pathKey = path.join('/');
     let found: any = null;
@@ -98,6 +106,7 @@ class Operation {
     }
     if (found) this.listeners.delete(found);
   }
+
   once(path: Path, cb: Callback) {
     const pathKey = path.join('/');
     const p = this.payloads.get(pathKey);
